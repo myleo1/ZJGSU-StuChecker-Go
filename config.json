@@ -1,0 +1,19 @@
+{
+  "project": {
+    "dir": "项目目录"
+  },
+  "checker": [
+    {
+      "name": "姓名",
+      "username": "学号",
+      "password": "密码",
+      "campus": "校区",
+      "wechatPushKey": "微信推送账号",
+      "skip": false
+    }
+  ],
+  "wechat": {
+    "api": "微信推送api",
+    "token": "微信推送token"
+  }
+}
