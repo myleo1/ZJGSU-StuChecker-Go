@@ -31,8 +31,7 @@ func Push2Wechat(checker *model.Checker, title string) {
 			"to":          checker.WechatPushKey,
 			"title":       title,
 			"description": description,
-			//todo
-			"url": "https://github.com/myleo1",
+			"url":         "https://github.com/myleo1/ZJGSU-StuChecker-Go",
 		},
 	})
 	if err != nil || resp.StatusCode() != http.StatusOK {
