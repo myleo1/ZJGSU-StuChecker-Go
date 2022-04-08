@@ -1,6 +1,6 @@
 package model
 
 const (
-	SuccessCheck = "我的商大打卡成功"
-	FailCheck    = "我的商大打卡失败"
+	SuccessCheck = "云战役打卡成功"
+	FailCheck    = "云战役打卡失败"
 )

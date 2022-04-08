@@ -1,5 +1,5 @@
 BINARY=ZJGSU-StuChecker-Go
-VERSION=v0.0.1-beta
+VERSION=v1.0.0-beta
 DATE=`date +%FT%T%z`
 GoVersion=`go version`
 LDFLAGS=-ldflags "-s -w -X main.version=${VERSION} -X 'main.date=${DATE}' -X 'main.goVersion=${GoVersion}'"
@@ -12,7 +12,7 @@ default:
 	@echo ${GoVersion}
 
 build:
-	@GOOS=linux GOARCH=amd64 go build -o build/${BINARY} ${LDFLAGS}
+	@GOOS=linux GOARCH=amd64 go build -trimpath -o build/${BINARY} ${LDFLAGS}
 	@echo "[ok] build ${BINARY}"
 
 build_osx:

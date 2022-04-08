@@ -10,25 +10,23 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var rootCmd = &cobra.Command{
-	Use: "ZJGSU-StuChecker-Go",
+func init() {
+	rootCmd.AddCommand(yzyCmd)
+}
+
+var yzyCmd = &cobra.Command{
+	Use: "yzy",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(`     _                    _               _
- ___| |_ _   _        ___| |__   ___  ___| | _____ _ __
-/ __| __| | | |_____ / __| '_ \ / _ \/ __| |/ / _ \ '__|
-\__ \ |_| |_| |_____| (__| | | |  __/ (__|   <  __/ |
-|___/\__|\__,_|      \___|_| |_|\___|\___|_|\_\___|_|`)
+		fmt.Println(`    _         _           __   _________   __
+   / \  _   _| |_ ___     \ \ / /__  /\ \ / /
+  / _ \| | | | __/ _ \ ____\ V /  / /  \ V /
+ / ___ \ |_| | || (_) |_____| |  / /_   | |
+/_/   \_\__,_|\__\___/      |_| /____|  |_|`)
 		initkit.BindFlags(cmd)
 		//打卡前准备
 		checkerList := &model.CheckerList{}
 		_ = jsonkit.ParseObj(jsonkit.ToString(configkit.Get("checker", model.CheckerList{})), checkerList)
-		//打卡
-		check.BeginCheck(*checkerList)
+		////打卡
+		check.BeginYzy(*checkerList)
 	},
-}
-
-func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		panic(err.Error())
-	}
 }

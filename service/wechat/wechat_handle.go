@@ -4,9 +4,9 @@ import (
 	"ZJGSU-StuChecker-Go/model"
 	"ZJGSU-StuChecker-Go/service/httpkit"
 	"fmt"
-	"github.com/myleo1/go-core-kit/class/exception"
-	"github.com/myleo1/go-core-kit/library/timekit"
-	"github.com/myleo1/go-core-kit/service/configkit"
+	"github.com/mizuki1412/go-core-kit/class/exception"
+	"github.com/mizuki1412/go-core-kit/library/timekit"
+	"github.com/mizuki1412/go-core-kit/service/configkit"
 	"net/http"
 	"time"
 )
@@ -33,6 +33,7 @@ func Push2Wechat(checker *model.Checker, title string) {
 			"description": description,
 			"url":         "https://github.com/myleo1/ZJGSU-StuChecker-Go",
 		},
+		Timeout: 5,
 	})
 	if err != nil || resp.StatusCode() != http.StatusOK {
 		panic(exception.New("微信推送失败"))

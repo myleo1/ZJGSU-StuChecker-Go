@@ -9,6 +9,7 @@
       "password": "密码",
       "campus": "校区",
       "wechatPushKey": "微信推送账号",
+      "deviceId": "手机唯一识别码",
       "skip": false
     }
   ],

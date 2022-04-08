@@ -5,11 +5,11 @@ import (
 	"ZJGSU-StuChecker-Go/service/httpkit"
 	"ZJGSU-StuChecker-Go/service/wechat"
 	"fmt"
-	"github.com/myleo1/go-core-kit/class/exception"
-	"github.com/myleo1/go-core-kit/library/commonkit"
-	"github.com/myleo1/go-core-kit/library/mathkit"
-	"github.com/myleo1/go-core-kit/library/timekit"
-	"github.com/myleo1/go-core-kit/service/logkit"
+	"github.com/mizuki1412/go-core-kit/class/exception"
+	"github.com/mizuki1412/go-core-kit/library/commonkit"
+	"github.com/mizuki1412/go-core-kit/library/mathkit"
+	"github.com/mizuki1412/go-core-kit/library/timekit"
+	"github.com/mizuki1412/go-core-kit/service/logkit"
 	"github.com/spf13/cast"
 	"github.com/tidwall/gjson"
 	"net/http"
@@ -17,7 +17,10 @@ import (
 	"time"
 )
 
+var mutex sync.Mutex
+
 // BeginCheck 开始打卡
+// Deprecated
 func BeginCheck(checkerList []*model.Checker) {
 	if len(checkerList) == 0 {
 		logkit.Fatal("未读取到用户")
@@ -52,6 +55,41 @@ func BeginCheck(checkerList []*model.Checker) {
 	logkit.Info(fmt.Sprintf("---------全部打卡完毕---------"))
 }
 
+// BeginYzy 开始云战役
+func BeginYzy(checkerList []*model.Checker) {
+	if len(checkerList) == 0 {
+		logkit.Fatal("未读取到用户")
+	}
+	var wg sync.WaitGroup
+	wg.Add(len(checkerList))
+	for _, v := range checkerList {
+		checker := v
+		if _preHandle(checker) {
+			//参数校验通过 开始打卡流程
+			//每个用户一个协程 因为有不同的阻塞时间（每个人打卡前等待时间不同）
+			commonkit.RecoverGoFuncWrapper(func() {
+				defer wg.Done()
+				if checker.Skip {
+					//跳过打卡
+					logkit.Info(fmt.Sprintf("【%s】跳过打卡...", checker.Name))
+					return
+				}
+				now := time.Now().UTC()
+				wait := mathkit.RandInt32(waitMinYzy, waitMaxYzy)
+				startCheckDt := now.Add(time.Duration(wait) * time.Second).Format(timekit.TimeLayout)
+				logkit.Info(fmt.Sprintf("【%s】将在 UTC <%s> 打卡...", checker.Name, startCheckDt))
+				time.Sleep(time.Duration(wait) * time.Second)
+				_checkYzy(checker)
+				logkit.Info(fmt.Sprintf("【%s】打卡完毕...", checker.Name))
+			})
+		} else {
+			wg.Done()
+		}
+	}
+	wg.Wait()
+	logkit.Info(fmt.Sprintf("---------全部打卡完毕---------"))
+}
+
 //校验config.json中的参数
 func _preHandle(checker *model.Checker) bool {
 	if checker.Name != "" && checker.Username != "" && checker.Password != "" && checker.Campus != "" {
@@ -60,7 +98,7 @@ func _preHandle(checker *model.Checker) bool {
 	return false
 }
 
-func _check(checker *model.Checker) {
+func _checkCommon(checker *model.Checker) *model.PostInfo {
 	//按校区生成经纬度
 	var long, lat float64
 	var place string
@@ -81,6 +119,19 @@ func _check(checker *model.Checker) {
 		errHandle(checker)
 		panic(exception.New("【" + checker.Name + "】" + "校区填写错误"))
 	}
+	info := &model.PostInfo{
+		Long:  long,
+		Lat:   lat,
+		Place: place,
+	}
+	return info
+}
+
+// Deprecated
+func _check(checker *model.Checker) {
+	mutex.Lock()
+	defer mutex.Unlock()
+	info := _checkCommon(checker)
 	//获取access_token
 	resp, err := httpkit.Request(httpkit.Req{
 		Method: http.MethodPost,
@@ -130,9 +181,91 @@ func _check(checker *model.Checker) {
 			"app-name": "stuCheck",
 		},
 		JsonData: map[string]string{
-			"coordinate": fmt.Sprintf("%s,%s", cast.ToString(long), cast.ToString(lat)),
-			"place":      place,
+			"coordinate": fmt.Sprintf("%s,%s", cast.ToString(info.Long), cast.ToString(info.Lat)),
+			"place":      info.Place,
 		},
+	})
+	if err != nil || resp.StatusCode() != http.StatusOK {
+		errHandle(checker)
+		panic(exception.New("【" + checker.Name + "】" + "POST打卡接口失败"))
+	}
+	res, err = resp.RespBody2Str()
+	if err != nil {
+		errHandle(checker)
+		panic(exception.New("【" + checker.Name + "】" + err.Error()))
+	}
+	if ok := gjson.Get(res, "success").Bool(); ok {
+		wechat.Push2Wechat(checker, model.SuccessCheck)
+	} else {
+		errHandle(checker)
+		panic(exception.New("【" + checker.Name + "】" + "打卡失败"))
+	}
+}
+
+func _checkYzy(checker *model.Checker) {
+	mutex.Lock()
+	defer mutex.Unlock()
+	info := _checkCommon(checker)
+	//resp, err := httpkit.Request(httpkit.Req{
+	//	Method: http.MethodGet,
+	//	Url:    "https://yzy.zjgsu.edu.cn/cloudbattleservice/auth/login",
+	//})
+	//if err != nil || resp.StatusCode() != http.StatusOK {
+	//	errHandle(checker)
+	//	panic(exception.New("【" + checker.Name + "】" + "获取打卡系统token失败"))
+	//}
+	//token := resp.GetQueryParam("token")
+	resp, err := httpkit.Request(httpkit.Req{
+		Method: http.MethodPost,
+		Url:    "https://yzy.zjgsu.edu.cn/cloudbattleservice/service/login",
+		Header: map[string]string{
+			"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.18(0x1800123f) NetType/WIFI Language/zh_CN",
+		},
+		JsonData: map[string]string{
+			"gh":    checker.Username,
+			"psswd": checker.Password,
+		},
+		Timeout: 5,
+	})
+	if err != nil || resp.StatusCode() != http.StatusOK {
+		errHandle(checker)
+		panic(exception.New("【" + checker.Name + "】" + "获取打卡系统token失败"))
+	}
+	res, err := resp.RespBody2Str()
+	if err != nil {
+		errHandle(checker)
+		panic(exception.New("【" + checker.Name + "】" + "获取打卡系统token失败"))
+	}
+	if ok := gjson.Get(res, "success").Bool(); !ok {
+		errHandle(checker)
+		panic(exception.New("【" + checker.Name + "】" + "获取打卡系统token失败"))
+	}
+	token := gjson.Get(res, "data.token").String()
+	//云战役
+	resp, err = httpkit.Request(httpkit.Req{
+		Method: http.MethodPost,
+		Url:    "https://yzy.zjgsu.edu.cn/cloudbattleservice/service/add",
+		Header: map[string]string{
+			"token":      token,
+			"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148;zfsoft",
+		},
+		JsonData: map[string]string{
+			"currentResd": info.Place,
+			"fromHbToZj":  "C",
+			"fromWtToHz":  "B",
+			"meetCase":    "C",
+			"travelCase":  "D",
+			"medObsv":     "B",
+			"belowCase":   "D",
+			"hzQrCode":    "A",
+			"specialDesc": "无",
+			"deviceId":    checker.DeviceId,
+			"fromDevice":  "App",
+			"isNewEpid":   "否",
+			"location":    info.Place,
+			"coordinate":  fmt.Sprintf("%s,%s", cast.ToString(info.Long), cast.ToString(info.Lat)),
+		},
+		Timeout: 5,
 	})
 	if err != nil || resp.StatusCode() != http.StatusOK {
 		errHandle(checker)

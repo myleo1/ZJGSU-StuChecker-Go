@@ -3,7 +3,7 @@ package httpkit
 import (
 	"bytes"
 	"crypto/tls"
-	"github.com/myleo1/go-core-kit/library/jsonkit"
+	"github.com/mizuki1412/go-core-kit/library/jsonkit"
 	"io"
 	"net/http"
 	"net/http/cookiejar"

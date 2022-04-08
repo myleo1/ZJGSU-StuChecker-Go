@@ -3,7 +3,7 @@ package main
 import (
 	"ZJGSU-StuChecker-Go/cmd"
 	"fmt"
-	"github.com/myleo1/go-core-kit/init/initkit"
+	"github.com/mizuki1412/go-core-kit/init/initkit"
 )
 
 var (
