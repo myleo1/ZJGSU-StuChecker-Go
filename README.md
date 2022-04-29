@@ -1,6 +1,8 @@
 # ZJGSU-StuChecker-Go
 
-> 浙江工商大学 我的商大/新版云战役每日自动打卡
+> 浙江工商大学 云战役每日自动打卡
+
+支持我的商大新版云战役
 
 
 前提：https://github.com/myleo1/wechat-work-pusher
