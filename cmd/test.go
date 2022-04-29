@@ -5,10 +5,11 @@ import (
 	"github.com/mizuki1412/go-core-kit/init/initkit"
 	"github.com/mizuki1412/go-core-kit/library/filekit"
 	"github.com/mizuki1412/go-core-kit/library/jsonkit"
-	"github.com/mizuki1412/go-core-kit/library/mathkit"
 	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
 	"github.com/tidwall/gjson"
+	"math/rand"
+	"time"
 )
 
 func init() {
@@ -27,7 +28,8 @@ var testCmd = &cobra.Command{
 func gen() string {
 	str := "164"
 	for ii := 0; ii < 17; ii++ {
-		str += cast.ToString(mathkit.RandInt32(0, 10))
+		rand.Seed(time.Now().UnixNano())
+		str += cast.ToString(rand.Intn(10))
 	}
 	return str
 }
