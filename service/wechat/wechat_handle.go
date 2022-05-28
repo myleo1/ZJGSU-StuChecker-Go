@@ -16,10 +16,13 @@ func Push2Wechat(checker *model.Checker, title string) {
 		return
 	}
 	description := ""
-	if title == model.SuccessCheck {
+	switch title {
+	case model.SuccessCheck:
 		description = fmt.Sprintf("<div class=\"gray\">%s\n</div> <div class=\"normal\">恭喜您%s~,学号[%s]打卡成功！\n</div><div class=\"highlight\">点击卡片查看打卡源码~</div>", time.Now().UTC().Add(time.Hour*8).Format(timekit.TimeLayoutYMD), checker.Name, checker.Username)
-	} else {
+	case model.FailCheck:
 		description = fmt.Sprintf("<div class=\"gray\">%s\n</div> <div class=\"normal\">很遗憾%s~,学号[%s]打卡失败！\n</div><div class=\"highlight\">点击卡片查看打卡源码~</div>", time.Now().UTC().Add(time.Hour*8).Format(timekit.TimeLayoutYMD), checker.Name, checker.Username)
+	case model.AlreadyCheck:
+		description = fmt.Sprintf("<div class=\"gray\">%s\n</div> <div class=\"normal\">啊哦%s~,学号[%s]当日已打卡！\n</div><div class=\"highlight\">点击卡片查看打卡源码~</div>", time.Now().UTC().Add(time.Hour*8).Format(timekit.TimeLayoutYMD), checker.Name, checker.Username)
 	}
 	resp, err := httpkit.Request(httpkit.Req{
 		Method: http.MethodPost,

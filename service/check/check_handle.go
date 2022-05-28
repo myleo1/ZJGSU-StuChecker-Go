@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/mizuki1412/go-core-kit/class/exception"
 	"github.com/mizuki1412/go-core-kit/library/commonkit"
+	"github.com/mizuki1412/go-core-kit/library/cryptokit"
 	"github.com/mizuki1412/go-core-kit/library/mathkit"
 	"github.com/mizuki1412/go-core-kit/library/timekit"
 	"github.com/mizuki1412/go-core-kit/service/logkit"
@@ -215,32 +216,78 @@ func _checkYzy(checker *model.Checker) {
 	//	panic(exception.New("【" + checker.Name + "】" + "获取打卡系统token失败"))
 	//}
 	//token := resp.GetQueryParam("token")
+	//resp, err := httpkit.Request(httpkit.Req{
+	//	Method: http.MethodPost,
+	//	Url:    "https://yzy.zjgsu.edu.cn/cloudbattleservice/service/login",
+	//	Header: map[string]string{
+	//		"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.18(0x1800123f) NetType/WIFI Language/zh_CN",
+	//	},
+	//	JsonData: map[string]string{
+	//		"gh":    checker.Username,
+	//		"psswd": checker.Password,
+	//	},
+	//	Timeout: 5,
+	//})
+	//if err != nil || resp.StatusCode() != http.StatusOK {
+	//	errHandle(checker)
+	//	panic(exception.New("【" + checker.Name + "】" + "获取打卡系统token失败"))
+	//}
+	//res, err := resp.RespBody2Str()
+	//if err != nil {
+	//	errHandle(checker)
+	//	panic(exception.New("【" + checker.Name + "】" + "获取打卡系统token失败"))
+	//}
+	//if ok := gjson.Get(res, "success").Bool(); !ok {
+	//	errHandle(checker)
+	//	panic(exception.New("【" + checker.Name + "】" + "获取打卡系统token失败"))
+	//}
+	//token := gjson.Get(res, "data.token").String()
+
+	//22.05.28 update 以上方案获取token失效,需要绑定微信,操作起来太麻烦,最终还是走我的商大的API获取token
+	//获取access_token
 	resp, err := httpkit.Request(httpkit.Req{
 		Method: http.MethodPost,
-		Url:    "https://yzy.zjgsu.edu.cn/cloudbattleservice/service/login",
-		Header: map[string]string{
-			"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.18(0x1800123f) NetType/WIFI Language/zh_CN",
+		Url:    "https://uia.zjgsu.edu.cn/cas/mobile/getAccessToken",
+		FormData: map[string]string{
+			"clientId":    clientId,
+			"mobileBT":    mobileBT,
+			"redirectUrl": redirectUrl,
+			"username":    checker.Username,
+			"password":    checker.Password,
 		},
-		JsonData: map[string]string{
-			"gh":    checker.Username,
-			"psswd": checker.Password,
-		},
-		Timeout: 5,
+	})
+	if err != nil || resp.StatusCode() != http.StatusOK {
+		errHandle(checker)
+		panic(exception.New("【" + checker.Name + "】" + "获取access_token失败"))
+	}
+	res, err := resp.RespBody2Str()
+	if err != nil {
+		errHandle(checker)
+		panic(exception.New("【" + checker.Name + "】" + err.Error()))
+	}
+	accessToken := gjson.Get(res, "access_token")
+	//cas认证
+	resp, err = httpkit.Request(httpkit.Req{
+		Method: http.MethodGet,
+		Url:    fmt.Sprintf("https://uia.zjgsu.edu.cn/cas/login?service=https://myapp.zjgsu.edu.cn/home/index&access_token=%s&mobileBT=%s", accessToken, mobileBT),
+	})
+	if err != nil || resp.StatusCode() != http.StatusOK {
+		errHandle(checker)
+		panic(exception.New("【" + checker.Name + "】" + "cas认证失败"))
+	}
+	resp, err = httpkit.Request(httpkit.Req{
+		Method: http.MethodGet,
+		Url:    "https://ticket.zjgsu.edu.cn/stucheckservice/auth/login/stuCheck",
 	})
 	if err != nil || resp.StatusCode() != http.StatusOK {
 		errHandle(checker)
 		panic(exception.New("【" + checker.Name + "】" + "获取打卡系统token失败"))
 	}
-	res, err := resp.RespBody2Str()
-	if err != nil {
-		errHandle(checker)
-		panic(exception.New("【" + checker.Name + "】" + "获取打卡系统token失败"))
-	}
-	if ok := gjson.Get(res, "success").Bool(); !ok {
-		errHandle(checker)
-		panic(exception.New("【" + checker.Name + "】" + "获取打卡系统token失败"))
-	}
-	token := gjson.Get(res, "data.token").String()
+	token := resp.GetQueryParam("token")
+	t := cast.ToString(time.Now().UnixMilli())
+	zjgsuCheck := timeEncode(t)
+	keyCode := checker.Username + "#" + t + "$533E8CCF0194585286CC349"
+	zjgsuAuth := cryptokit.MD5(keyCode)
 	//云战役
 	resp, err = httpkit.Request(httpkit.Req{
 		Method: http.MethodPost,
@@ -248,6 +295,8 @@ func _checkYzy(checker *model.Checker) {
 		Header: map[string]string{
 			"token":      token,
 			"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148;zfsoft",
+			"zjgsuCheck": zjgsuCheck,
+			"zjgsuAuth":  zjgsuAuth,
 		},
 		JsonData: map[string]string{
 			"currentResd": info.Place,
@@ -276,8 +325,12 @@ func _checkYzy(checker *model.Checker) {
 		errHandle(checker)
 		panic(exception.New("【" + checker.Name + "】" + err.Error()))
 	}
-	if ok := gjson.Get(res, "success").Bool(); ok {
-		wechat.Push2Wechat(checker, model.SuccessCheck)
+	if ok := gjson.Get(res, "code").Int(); ok == 20000 || ok == 20001 {
+		if ok == 20000 {
+			wechat.Push2Wechat(checker, model.SuccessCheck)
+		} else if ok == 20001 {
+			wechat.Push2Wechat(checker, model.AlreadyCheck)
+		}
 	} else {
 		errHandle(checker)
 		panic(exception.New("【" + checker.Name + "】" + "打卡失败"))
@@ -286,4 +339,14 @@ func _checkYzy(checker *model.Checker) {
 
 func errHandle(checker *model.Checker) {
 	wechat.Push2Wechat(checker, model.FailCheck)
+}
+
+func timeEncode(t string) string {
+	str := ""
+	for _, v := range t {
+		vv := v - 48
+		r := string(vv + 97)
+		str += r
+	}
+	return str
 }
