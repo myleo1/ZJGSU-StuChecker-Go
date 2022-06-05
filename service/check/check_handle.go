@@ -4,8 +4,12 @@ import (
 	"ZJGSU-StuChecker-Go/model"
 	"ZJGSU-StuChecker-Go/service/httpkit"
 	"ZJGSU-StuChecker-Go/service/wechat"
+	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
 	"fmt"
 	"github.com/mizuki1412/go-core-kit/class/exception"
+	"github.com/mizuki1412/go-core-kit/library/bytekit"
 	"github.com/mizuki1412/go-core-kit/library/commonkit"
 	"github.com/mizuki1412/go-core-kit/library/cryptokit"
 	"github.com/mizuki1412/go-core-kit/library/mathkit"
@@ -284,9 +288,11 @@ func _checkYzy(checker *model.Checker) {
 		panic(exception.New("【" + checker.Name + "】" + "获取打卡系统token失败"))
 	}
 	token := resp.GetQueryParam("token")
-	t := cast.ToString(time.Now().UnixMilli())
-	zjgsuCheck := timeEncode(t)
-	keyCode := checker.Username + "#" + t + "$533E8CCF0194585286CC349"
+	t := cast.ToString(time.Now().UnixMilli()) + "26B0"
+	plaintext := []byte("882D")
+	plaintext = append(plaintext, []byte(t)...)
+	zjgsuCheck := _AESCBCEncrypt(plaintext)
+	keyCode := checker.Username + "*" + t + "^25A622DCE625882D8085CC9F00BF8C12"
 	zjgsuAuth := cryptokit.MD5(keyCode)
 	//云战役
 	resp, err = httpkit.Request(httpkit.Req{
@@ -325,12 +331,11 @@ func _checkYzy(checker *model.Checker) {
 		errHandle(checker)
 		panic(exception.New("【" + checker.Name + "】" + err.Error()))
 	}
-	if ok := gjson.Get(res, "code").Int(); ok == 20000 || ok == 20001 {
-		if ok == 20000 {
-			wechat.Push2Wechat(checker, model.SuccessCheck)
-		} else if ok == 20001 {
-			wechat.Push2Wechat(checker, model.AlreadyCheck)
-		}
+	ok := gjson.Get(res, "message").String()
+	if ok == "成功" {
+		wechat.Push2Wechat(checker, model.SuccessCheck)
+	} else if ok == "今日已打卡！" {
+		wechat.Push2Wechat(checker, model.AlreadyCheck)
 	} else {
 		errHandle(checker)
 		panic(exception.New("【" + checker.Name + "】" + "打卡失败"))
@@ -341,12 +346,29 @@ func errHandle(checker *model.Checker) {
 	wechat.Push2Wechat(checker, model.FailCheck)
 }
 
-func timeEncode(t string) string {
-	str := ""
-	for _, v := range t {
-		vv := v - 48
-		r := string(vv + 97)
-		str += r
+func _padding(plaintext []byte, blockSize int) []byte {
+	//计算要填充的长度
+	n := blockSize - len(plaintext)%blockSize
+	//对原来的明文填充n个n
+	temp := bytes.Repeat([]byte{byte(n)}, n)
+	plaintext = append(plaintext, temp...)
+	return plaintext
+}
+
+func _AESCBCEncrypt(plaintext []byte) string {
+	block, err := aes.NewCipher([]byte("ED7925CF8acd26B0"))
+	if err != nil {
+		panic(exception.New(err.Error()))
 	}
-	return str
+	//进行填充
+	plaintext = _padding(plaintext, block.BlockSize())
+	//指定初始向量，长度和block的块尺寸一致
+	iv := []byte("3670759D768a359f")
+	//指定分组模式，返回一个blockMode对象接口
+	blockMode := cipher.NewCBCEncrypter(block, iv)
+	//加密连续数据库
+	ciphertext := make([]byte, len(plaintext))
+	blockMode.CryptBlocks(ciphertext, plaintext)
+	//返回密文
+	return bytekit.Bytes2HexString1(ciphertext)
 }
