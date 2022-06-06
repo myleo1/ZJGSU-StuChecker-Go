@@ -83,7 +83,7 @@ func BeginYzy(checkerList []*model.Checker) {
 				wait := mathkit.RandInt32(waitMinYzy, waitMaxYzy)
 				startCheckDt := now.Add(time.Duration(wait) * time.Second).Format(timekit.TimeLayout)
 				logkit.Info(fmt.Sprintf("【%s】将在 UTC <%s> 打卡...", checker.Name, startCheckDt))
-				time.Sleep(time.Duration(wait) * time.Second)
+				//time.Sleep(time.Duration(wait) * time.Second)
 				_checkYzy(checker)
 				logkit.Info(fmt.Sprintf("【%s】打卡完毕...", checker.Name))
 			})
@@ -211,83 +211,75 @@ func _checkYzy(checker *model.Checker) {
 	mutex.Lock()
 	defer mutex.Unlock()
 	info := _checkCommon(checker)
+	//22.06.06 update 重新获取了web端获取token的方式
+	resp, err := httpkit.Request(httpkit.Req{
+		Method: http.MethodPost,
+		Url:    "https://yzy.zjgsu.edu.cn/cloudbattleservice/service/cloudLogin",
+		Header: map[string]string{
+			"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.18(0x1800123f) NetType/WIFI Language/zh_CN",
+		},
+		JsonData: map[string]string{
+			"gh":    checker.Username,
+			"psswd": checker.Password,
+		},
+		Timeout: 5,
+	})
+	if err != nil || resp.StatusCode() != http.StatusOK {
+		errHandle(checker)
+		panic(exception.New("【" + checker.Name + "】" + "获取打卡系统token失败"))
+	}
+	res, err := resp.RespBody2Str()
+	if err != nil {
+		errHandle(checker)
+		panic(exception.New("【" + checker.Name + "】" + "获取打卡系统token失败"))
+	}
+	if ok := gjson.Get(res, "success").Bool(); !ok {
+		errHandle(checker)
+		panic(exception.New("【" + checker.Name + "】" + "获取打卡系统token失败"))
+	}
+	token := gjson.Get(res, "data.token").String()
+
+	//22.05.28 update 以上方案获取token失效,需要绑定微信,操作起来太麻烦,最终还是走我的商大的API获取token
+	//获取access_token
 	//resp, err := httpkit.Request(httpkit.Req{
+	//	Method: http.MethodPost,
+	//	Url:    "https://uia.zjgsu.edu.cn/cas/mobile/getAccessToken",
+	//	FormData: map[string]string{
+	//		"clientId":    clientId,
+	//		"mobileBT":    mobileBT,
+	//		"redirectUrl": redirectUrl,
+	//		"username":    checker.Username,
+	//		"password":    checker.Password,
+	//	},
+	//})
+	//if err != nil || resp.StatusCode() != http.StatusOK {
+	//	errHandle(checker)
+	//	panic(exception.New("【" + checker.Name + "】" + "获取access_token失败"))
+	//}
+	//res, err := resp.RespBody2Str()
+	//if err != nil {
+	//	errHandle(checker)
+	//	panic(exception.New("【" + checker.Name + "】" + err.Error()))
+	//}
+	//accessToken := gjson.Get(res, "access_token")
+	////cas认证
+	//resp, err = httpkit.Request(httpkit.Req{
 	//	Method: http.MethodGet,
-	//	Url:    "https://yzy.zjgsu.edu.cn/cloudbattleservice/auth/login",
+	//	Url:    fmt.Sprintf("https://uia.zjgsu.edu.cn/cas/login?service=https://myapp.zjgsu.edu.cn/home/index&access_token=%s&mobileBT=%s", accessToken, mobileBT),
+	//})
+	//if err != nil || resp.StatusCode() != http.StatusOK {
+	//	errHandle(checker)
+	//	panic(exception.New("【" + checker.Name + "】" + "cas认证失败"))
+	//}
+	//resp, err = httpkit.Request(httpkit.Req{
+	//	Method: http.MethodGet,
+	//	Url:    "https://ticket.zjgsu.edu.cn/stucheckservice/auth/login/stuCheck",
 	//})
 	//if err != nil || resp.StatusCode() != http.StatusOK {
 	//	errHandle(checker)
 	//	panic(exception.New("【" + checker.Name + "】" + "获取打卡系统token失败"))
 	//}
 	//token := resp.GetQueryParam("token")
-	//resp, err := httpkit.Request(httpkit.Req{
-	//	Method: http.MethodPost,
-	//	Url:    "https://yzy.zjgsu.edu.cn/cloudbattleservice/service/login",
-	//	Header: map[string]string{
-	//		"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.18(0x1800123f) NetType/WIFI Language/zh_CN",
-	//	},
-	//	JsonData: map[string]string{
-	//		"gh":    checker.Username,
-	//		"psswd": checker.Password,
-	//	},
-	//	Timeout: 5,
-	//})
-	//if err != nil || resp.StatusCode() != http.StatusOK {
-	//	errHandle(checker)
-	//	panic(exception.New("【" + checker.Name + "】" + "获取打卡系统token失败"))
-	//}
-	//res, err := resp.RespBody2Str()
-	//if err != nil {
-	//	errHandle(checker)
-	//	panic(exception.New("【" + checker.Name + "】" + "获取打卡系统token失败"))
-	//}
-	//if ok := gjson.Get(res, "success").Bool(); !ok {
-	//	errHandle(checker)
-	//	panic(exception.New("【" + checker.Name + "】" + "获取打卡系统token失败"))
-	//}
-	//token := gjson.Get(res, "data.token").String()
-
-	//22.05.28 update 以上方案获取token失效,需要绑定微信,操作起来太麻烦,最终还是走我的商大的API获取token
-	//获取access_token
-	resp, err := httpkit.Request(httpkit.Req{
-		Method: http.MethodPost,
-		Url:    "https://uia.zjgsu.edu.cn/cas/mobile/getAccessToken",
-		FormData: map[string]string{
-			"clientId":    clientId,
-			"mobileBT":    mobileBT,
-			"redirectUrl": redirectUrl,
-			"username":    checker.Username,
-			"password":    checker.Password,
-		},
-	})
-	if err != nil || resp.StatusCode() != http.StatusOK {
-		errHandle(checker)
-		panic(exception.New("【" + checker.Name + "】" + "获取access_token失败"))
-	}
-	res, err := resp.RespBody2Str()
-	if err != nil {
-		errHandle(checker)
-		panic(exception.New("【" + checker.Name + "】" + err.Error()))
-	}
-	accessToken := gjson.Get(res, "access_token")
-	//cas认证
-	resp, err = httpkit.Request(httpkit.Req{
-		Method: http.MethodGet,
-		Url:    fmt.Sprintf("https://uia.zjgsu.edu.cn/cas/login?service=https://myapp.zjgsu.edu.cn/home/index&access_token=%s&mobileBT=%s", accessToken, mobileBT),
-	})
-	if err != nil || resp.StatusCode() != http.StatusOK {
-		errHandle(checker)
-		panic(exception.New("【" + checker.Name + "】" + "cas认证失败"))
-	}
-	resp, err = httpkit.Request(httpkit.Req{
-		Method: http.MethodGet,
-		Url:    "https://ticket.zjgsu.edu.cn/stucheckservice/auth/login/stuCheck",
-	})
-	if err != nil || resp.StatusCode() != http.StatusOK {
-		errHandle(checker)
-		panic(exception.New("【" + checker.Name + "】" + "获取打卡系统token失败"))
-	}
-	token := resp.GetQueryParam("token")
 	t := cast.ToString(time.Now().UnixMilli()) + "26B0"
 	plaintext := []byte("882D")
 	plaintext = append(plaintext, []byte(t)...)
