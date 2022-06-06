@@ -83,7 +83,7 @@ func BeginYzy(checkerList []*model.Checker) {
 				wait := mathkit.RandInt32(waitMinYzy, waitMaxYzy)
 				startCheckDt := now.Add(time.Duration(wait) * time.Second).Format(timekit.TimeLayout)
 				logkit.Info(fmt.Sprintf("【%s】将在 UTC <%s> 打卡...", checker.Name, startCheckDt))
-				//time.Sleep(time.Duration(wait) * time.Second)
+				time.Sleep(time.Duration(wait) * time.Second)
 				_checkYzy(checker)
 				logkit.Info(fmt.Sprintf("【%s】打卡完毕...", checker.Name))
 			})
